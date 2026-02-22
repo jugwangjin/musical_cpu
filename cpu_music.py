@@ -150,9 +150,8 @@ def main():
                     root_name, root_midi, progression, melody_rhythm = generate_app_theme(current_title)
                     tick = 0 
                 
-                # 2. CPU를 '밴드 멤버 소환' 용도로 사용 (Dynamic Orchestration)
-                # 불쾌한 음을 추가하는 대신, CPU가 낮으면 조용하게, 높으면 풍성하게 "편곡"을 바꿉니다.
-                cpu = psutil.cpu_percent()
+                # CPU 값을 다시 가져옴 (위쪽에서는 렌더링에만 사용했으나, 업데이트가 안 될 수 있으므로 여기서 명확히 갱신)
+                cpu = psutil.cpu_percent(interval=None) # interval=None은 즉시 반환하지만 변동성을 읽으려면 메인 루프 안에 있어야함
                 
                 band_active = {
                     'drum': True,                 # 드럼은 항상 연주 (기본 비트)
@@ -161,16 +160,19 @@ def main():
                     'lead': cpu > 30.0            # CPU 30% 이상일 때 멜로디(비브라폰) 등장
                 }
                 
-                # 3. 프로세스 팝/드롭 효과음 (아주 짧고 귀여운 소리)
-                current_pids = set(psutil.pids())
-                new_procs = current_pids - last_pids
-                dead_procs = last_pids - current_pids
-                last_pids = current_pids
-                
-                if len(new_procs) > 0:
-                    s.fork(lambda: POP_SND.play_note(72, 0.4, 0.1)) # '뾱'
-                if len(dead_procs) > 0:
-                    s.fork(lambda: BELL_SND.play_note(84, 0.3, 0.1)) # '띵'
+                # 3. 프로세스 팝/드롭 효과음 (너무 빈번하면 버그처럼 보일 수 있으므로 일정 시간 딜레이 또는 묶어서 처리)
+                # psutil.pids()가 너무 무겁거나 빈번히 호출되어 메인 루프 지연 발생 가능.
+                # 0.2초마다 전체 pid를 부르면 무리가 올 수 있으므로 1초에 한 번만 체크
+                if tick % 5 == 0:
+                    current_pids = set(psutil.pids())
+                    new_procs = current_pids - last_pids
+                    dead_procs = last_pids - current_pids
+                    last_pids = current_pids
+                    
+                    if len(new_procs) > 0:
+                        s.fork(lambda: POP_SND.play_note(72, 0.4, 0.1)) # '뾱'
+                    if len(dead_procs) > 0:
+                        s.fork(lambda: BELL_SND.play_note(84, 0.3, 0.1)) # '띵'
                 
                 time.sleep(step_duration)
 
