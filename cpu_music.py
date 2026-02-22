@@ -23,7 +23,7 @@ with contextlib.redirect_stdout(open(os.devnull, 'w')):
     from scamp import Session
 
 console = Console()
-console.print("[bold yellow]Initializing Audio Engine... (6-Core Ensemble)[/bold yellow]")
+console.print("[bold yellow]Initializing Audio Engine... (6-Core Ensemble + Master Vol)[/bold yellow]")
 
 s = Session(max_threads=1000)
 
@@ -52,7 +52,7 @@ bass_guitar = s.new_part("Electric Bass (pick)")
 TARGET_CORES = [0, 2, 4, 6, 8, 10]
 
 # ==========================================
-# 2. 음악 데이터
+# 2. 음악 데이터 및 전역 설정
 # ==========================================
 SCALE_NOTES = [60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79, 81, 83, 84]
 
@@ -68,6 +68,7 @@ CHORD_LEVELS = [
 current_chord_name = "C Maj7"
 current_chord_notes = CHORD_LEVELS[0][2]
 current_mood = "Idle"
+master_volume = 1.0 # 0.0 ~ 1.0
 
 def get_chord_from_cpu(avg_cpu):
     idx = int((avg_cpu / 100.1) * len(CHORD_LEVELS))
@@ -78,73 +79,63 @@ def get_weighted_note(chord_notes):
     else: return random.choice(SCALE_NOTES)
 
 # ==========================================
-# 연주 함수 (6파트 - 볼륨 10% 하향 조정)
+# 연주 함수 (6파트 - 마스터 볼륨 적용)
 # ==========================================
 
-# Core 0: Guitar Lead
 def play_guitar_melody(cpu_val, duration):
     notes = current_chord_notes[:3]
-    if cpu_val > 60: # High intensity
+    if cpu_val > 60:
         note = random.choice(notes) + 12
-        s.fork(lambda: guitar_lead.play_note(note, 0.54, duration)) # 0.6 -> 0.54
+        vol = 0.54 * master_volume
+        s.fork(lambda: guitar_lead.play_note(note, vol, duration))
         return "Solo!"
-    else: # Low intensity
+    else:
         note = random.choice(notes)
-        s.fork(lambda: guitar_lead.play_note(note, 0.45, duration)) # 0.5 -> 0.45
+        vol = 0.45 * master_volume
+        s.fork(lambda: guitar_lead.play_note(note, vol, duration))
         return "Lick"
 
-# Core 2: Guitar Chord (Strumming)
 def play_guitar_strum(cpu_val, duration):
-    # 다운 스트로크 느낌을 위해 약간의 시간차(arpeggiate) 없이 그냥 펑크 스타일로 팍!
-    # 화음 구성: 루트 제외 상위 3음 (깔끔하게)
     notes = current_chord_notes[1:] 
-    # 0.4 -> 0.36, divisor 300 -> 330
-    vol = 0.36 + (cpu_val / 330)
-    s.fork(lambda: guitar_chord.play_chord(notes, vol, duration * 2)) # 좀 더 길게 울림
+    base_vol = 0.36 + (cpu_val / 330)
+    vol = base_vol * master_volume
+    s.fork(lambda: guitar_chord.play_chord(notes, vol, duration * 2)) 
     return f"Strum {current_chord_name}"
 
-# Core 4: Keys Lead (Clavinet Funk)
 def play_keys_funk(cpu_val, duration):
     base_note = get_weighted_note(current_chord_notes)
     if random.random() < 0.5: base_note += 12
-    
-    vol = 0.45 # 0.5 -> 0.45
-    # 통통 튀는 짧은 음
+    vol = 0.45 * master_volume
     s.fork(lambda: keys_lead.play_note(base_note, vol, 0.15))
     return "Funk!"
 
-# Core 6: Keys Chord (EP Comping)
 def play_keys_comp(cpu_val, duration):
     notes = current_chord_notes
-    # 0.4 -> 0.36, divisor 400 -> 440
-    vol = 0.36 + (cpu_val / 440)
-    # 부드럽게 깔아주는 코드
-    s.fork(lambda: keys_chord.play_chord(notes, vol, duration * 4)) # 1초(4틱) 지속
+    base_vol = 0.36 + (cpu_val / 440)
+    vol = base_vol * master_volume
+    s.fork(lambda: keys_chord.play_chord(notes, vol, duration * 4))
     return "Pad"
 
-# Core 8: Drums
 def play_drums_groove(cpu_val, duration):
-    parts = [42] # HH Closed
-    if cpu_val > 20: parts.append(36) # Kick
-    if cpu_val > 40: parts.append(38) # Snare
-    
+    parts = [42]
+    if cpu_val > 20: parts.append(36)
+    if cpu_val > 40: parts.append(38)
+    vol = 0.7 * master_volume
     for p in parts:
-        s.fork(lambda: drum_kit.play_note(p, 0.7, duration))
+        s.fork(lambda: drum_kit.play_note(p, vol, duration))
     return "Beat"
 
-# Core 10: Bass
 def play_bass_foundation(cpu_val, duration):
     root = current_chord_notes[0] - 12
     if cpu_val > 50: note = root + 7
     else: note = root
-    
-    s.fork(lambda: bass_guitar.play_note(note, 1.0, duration))
+    vol = 1.0 * master_volume
+    s.fork(lambda: bass_guitar.play_note(note, vol, duration))
     return f"Root {note}"
 
 def apply_reverb(ram_percent):
     reverb_val = 10 + int(ram_percent * 1.1)
     if reverb_val > 127: reverb_val = 127
-    
     for inst in [guitar_lead, guitar_chord, keys_lead, keys_chord, drum_kit, bass_guitar]:
         try:
             if hasattr(inst, 'play_cc'): inst.play_cc(91, reverb_val)
@@ -156,7 +147,7 @@ def apply_reverb(ram_percent):
 # ==========================================
 # UI 및 상태 관리
 # ==========================================
-GRAPH_WIDTH = 20 # 6개라 폭 조금 줄임
+GRAPH_WIDTH = 20
 vis_history = {i: deque([0]*GRAPH_WIDTH, maxlen=GRAPH_WIDTH) for i in range(6)}
 system_state = {
     0: {"role": "Gtr Lead (Jazz)", "cpu": 0, "note": "-", "active": False, "enabled": True},
@@ -182,7 +173,12 @@ def get_sparkline(data_queue):
 def generate_table(avg_cpu, ram_percent, reverb_val):
     color = "green" if avg_cpu < 40 else "yellow" if avg_cpu < 70 else "red"
     title = f"[bold {color}]CPU Symphony: {current_mood} ({current_chord_name}) | Load: {avg_cpu:.1f}%[/bold {color}]"
-    subtitle = f"[dim]RAM Reverb: {ram_percent:.1f}% | 1-6 to Mute | 6-Core Ensemble[/dim]"
+    
+    # 볼륨 상태 바 생성
+    vol_bars = int(master_volume * 10)
+    vol_display = "█" * vol_bars + "░" * (10 - vol_bars)
+    
+    subtitle = f"[dim]RAM Reverb: {ram_percent:.1f}% | Vol: {vol_display} ({int(master_volume*100)}%) | Q/W: Vol -/+ | 1-6: Mute[/dim]"
     
     table = Table(box=box.ROUNDED, title=title, caption=subtitle)
     table.add_column("Key", style="cyan", width=3, justify="center")
@@ -205,7 +201,7 @@ def generate_table(avg_cpu, ram_percent, reverb_val):
     return Panel(table, expand=False)
 
 def main():
-    global current_chord_name, current_chord_notes, current_mood
+    global current_chord_name, current_chord_notes, current_mood, master_volume
     tick_count = 0
     logic_history = [[0.0]*3 for _ in range(6)]
     step_duration = 0.25 
@@ -214,13 +210,17 @@ def main():
         try:
             while True:
                 if msvcrt.kbhit():
-                    key = msvcrt.getch()
+                    key = msvcrt.getch().lower() # 대소문자 구분 없이
                     if key == b'1': toggle_track(0)
                     elif key == b'2': toggle_track(1)
                     elif key == b'3': toggle_track(2)
                     elif key == b'4': toggle_track(3)
                     elif key == b'5': toggle_track(4)
                     elif key == b'6': toggle_track(5)
+                    elif key == b'q': 
+                        master_volume = max(0.0, master_volume - 0.02)
+                    elif key == b'w': 
+                        master_volume = min(1.0, master_volume + 0.02)
                 
                 time.sleep(step_duration)
 
@@ -239,21 +239,16 @@ def main():
                     vis_history[i].append(val)
                     system_state[i]["cpu"] = val
 
-                # --- 6 Core Logic ---
-                
-                # 1. Guitar Lead (Every 2 ticks, reactive)
                 if system_state[0]["enabled"]:
                     if tick_count % 2 == 0:
                         system_state[0]["note"] = play_guitar_melody(current_vals[0], step_duration)
                         system_state[0]["active"] = True
 
-                # 2. Guitar Chord (Every 4 ticks = 1 sec, on beat 1)
                 if system_state[1]["enabled"]:
                     if tick_count % 4 == 0:
                         system_state[1]["note"] = play_guitar_strum(current_vals[1], step_duration)
                         system_state[1]["active"] = True
 
-                # 3. Keys Lead (Random funk licks)
                 if system_state[2]["enabled"]:
                     vals = logic_history[2]
                     is_peak = (vals[1] > vals[0] and vals[1] > vals[2])
@@ -261,19 +256,16 @@ def main():
                         system_state[2]["note"] = play_keys_funk(vals[1], step_duration)
                         system_state[2]["active"] = True
 
-                # 4. Keys Chord (Sustained Pad, every 4 ticks, on beat 1)
                 if system_state[3]["enabled"]:
                     if tick_count % 4 == 0:
                         system_state[3]["note"] = play_keys_comp(current_vals[3], step_duration)
                         system_state[3]["active"] = True
 
-                # 5. Drums (Every 2 ticks)
                 if system_state[4]["enabled"]:
                     if tick_count % 2 == 0:
                         system_state[4]["note"] = play_drums_groove(current_vals[4], step_duration)
                         system_state[4]["active"] = True
 
-                # 6. Bass (Every 4 ticks)
                 if system_state[5]["enabled"]:
                     if tick_count % 4 == 0:
                         system_state[5]["note"] = play_bass_foundation(current_vals[5], step_duration)
