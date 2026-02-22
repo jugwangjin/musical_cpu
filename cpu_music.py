@@ -7,7 +7,7 @@ import random
 import msvcrt
 import ctypes
 import hashlib
-from collections import deque
+from rich.markup import escape
 from rich.live import Live
 from rich.table import Table
 from rich.panel import Panel
@@ -224,6 +224,10 @@ def main():
 
         except KeyboardInterrupt:
             pass
+        except Exception as e:
+            import traceback
+            with open("crash_log.txt", "w") as f:
+                traceback.print_exc(file=f)
 
 if __name__ == "__main__":
     main()
