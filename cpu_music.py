@@ -113,6 +113,7 @@ def main():
     melody_rhythm = [True] + [False]*15
     
     last_pids = set(psutil.pids())
+    psutil.cpu_percent() # Prime
     
     tick = 0
     step_duration = 0.2 # 75 BPM 기준 16분 음표 (Lo-Fi Chillhop 속도)
@@ -190,16 +191,16 @@ def main():
                 if band_active['drum']:
                     # Kick on 0, 10
                     if beat_16th in [0, 10]: 
-                        s.fork(lambda: DRUM_PART.play_note(36, 0.7, 0.1))
+                        s.fork(lambda: DRUM.play_note(36, 0.7, 0.1))
                     # Snare (Rimshot) on 4, 12
                     if beat_16th in [4, 12]: 
-                        s.fork(lambda: DRUM_PART.play_note(37, 0.6, 0.1))
+                        s.fork(lambda: DRUM.play_note(37, 0.6, 0.1))
                     # Hi-hat (8th notes)
                     if beat_16th % 2 == 0:
-                        s.fork(lambda: DRUM_PART.play_note(42, 0.3, 0.1))
+                        s.fork(lambda: DRUM.play_note(42, 0.3, 0.1))
                     # CPU가 50%를 넘으면 16비트 하이햇 추가
                     if cpu > 50.0 and beat_16th % 2 != 0:
-                        s.fork(lambda: DRUM_PART.play_note(42, 0.2, 0.1))
+                        s.fork(lambda: DRUM.play_note(42, 0.2, 0.1))
 
                 # 🎸 BASS (짧게 끊어치는 핑거 베이스)
                 if band_active['bass']:
