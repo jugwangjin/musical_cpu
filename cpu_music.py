@@ -3,6 +3,7 @@ import time
 import contextlib
 import os
 import logging
+import msvcrt
 from collections import deque
 from rich.live import Live
 from rich.table import Table
@@ -23,7 +24,7 @@ with contextlib.redirect_stdout(open(os.devnull, 'w')):
 # 1. 설정 및 초기화
 # ==========================================
 console = Console()
-console.print("[bold yellow]Initializing Audio Engine... (Please wait)[/bold yellow]")
+console.print("[bold yellow]Initializing Audio Engine... (Main Branch with Vol/Mute)[/bold yellow]")
 
 s = Session(max_threads=1000)
 
@@ -33,7 +34,7 @@ guitar_melody = s.new_part("Electric Guitar (Jazz)")
 piano_chord = s.new_part("Piano")
 piano_melody = s.new_part("Electric Piano")
 
-base_vol = 0.6
+INSTRUMENTS = [guitar_chord, guitar_melody, piano_chord, piano_melody]
 
 # 사용할 CPU 코어 인덱스 (0부터 시작: 0=1번, 3=4번, 6=7번, 9=10번)
 TARGET_CORES = [0, 3, 6, 9]
@@ -59,31 +60,51 @@ vis_history = {
     3: deque([0]*GRAPH_WIDTH, maxlen=GRAPH_WIDTH),
 }
 
+# enabled 필드 추가
 system_state = {
-    0: {"role": "Guitar Chord", "cpu": 0, "note": "-", "active": False},
-    1: {"role": "Guitar Melody", "cpu": 0, "note": "-", "active": False},
-    2: {"role": "Piano Chord", "cpu": 0, "note": "-", "active": False},
-    3: {"role": "Piano Melody", "cpu": 0, "note": "-", "active": False},
+    0: {"role": "Guitar Chord", "cpu": 0, "note": "-", "active": False, "enabled": True},
+    1: {"role": "Guitar Melody", "cpu": 0, "note": "-", "active": False, "enabled": True},
+    2: {"role": "Piano Chord", "cpu": 0, "note": "-", "active": False, "enabled": True},
+    3: {"role": "Piano Melody", "cpu": 0, "note": "-", "active": False, "enabled": True},
 }
+
+master_volume = 1.0 # 0.0 ~ 1.0
+base_vol = 0.6
 
 def map_value(value, steps):
     idx = int((value / 100.1) * steps)
     return idx
 
+def toggle_track(idx):
+    system_state[idx]["enabled"] = not system_state[idx]["enabled"]
+    if not system_state[idx]["enabled"]:
+        try: INSTRUMENTS[idx].end_all_notes()
+        except: pass
+
 def play_chord_async(inst, usage_val, core_idx):
+    if not system_state[core_idx]["enabled"]:
+        return
+
     idx = map_value(usage_val, 8)
     notes = CHORDS[idx]
     chord_name = CHORD_NAMES[idx]
     system_state[core_idx]["note"] = chord_name
     system_state[core_idx]["active"] = True
-    s.fork(lambda: inst.play_chord(notes, base_vol, 0.9))
+    
+    vol = base_vol * master_volume
+    s.fork(lambda: inst.play_chord(notes, vol, 0.9))
 
 def play_melody_async(inst, usage_val, core_idx):
+    if not system_state[core_idx]["enabled"]:
+        return
+
     idx = map_value(usage_val, 15)
     note = MELODY_NOTES[idx]
     system_state[core_idx]["note"] = f"Note {note}"
     system_state[core_idx]["active"] = True
-    s.fork(lambda: inst.play_note(note, base_vol + 0.1, 0.2))
+    
+    vol = (base_vol + 0.1) * master_volume
+    s.fork(lambda: inst.play_note(note, vol, 0.2))
 
 # ==========================================
 # 4. 그래프 그리기 함수 (Sparkline)
@@ -100,13 +121,20 @@ def get_sparkline(data_queue):
 # 5. UI 생성 함수
 # ==========================================
 def generate_table():
-    table = Table(box=box.ROUNDED, title="[bold cyan]CPU Music Generator (Live Graph)[/bold cyan]")
+    # 볼륨 상태 바 생성
+    vol_bars = int(master_volume * 10)
+    vol_display = "█" * vol_bars + "░" * (10 - vol_bars)
+    
+    subtitle = f"[dim]Vol: {vol_display} ({int(master_volume*100)}%) | Q/W: Vol -/+ | 1-4: Mute[/dim]"
+    
+    table = Table(box=box.ROUNDED, title="[bold cyan]CPU Music Generator (Live Graph)[/bold cyan]", caption=subtitle)
     table.add_column("Core", style="dim", width=6)
     table.add_column("Role", style="magenta", width=15)
     table.add_column("CPU Usage History (30 ticks)", width=GRAPH_WIDTH+10)
     table.add_column("Value", justify="right", width=6)
     table.add_column("Note", style="green", width=12)
     table.add_column("Act", justify="center", width=3)
+    table.add_column("Status", style="yellow", width=8)
 
     for i in range(4):
         state = system_state[i]
@@ -122,13 +150,19 @@ def generate_table():
         if state["active"]:
             state["active"] = False 
         
+        mute_status = "ON" if state["enabled"] else "[dim]MUTED[/dim]"
+        if not state["enabled"]:
+             graph = "x" * len(graph)
+             state["note"] = "-"
+
         table.add_row(
             f"Core {real_core_num}",
             state["role"],
             f"[{color}]{graph}[/{color}]",
             f"{cpu:.1f}%",
             state["note"],
-            status_icon
+            status_icon,
+            mute_status
         )
     return Panel(table, expand=False)
 
@@ -136,12 +170,25 @@ def generate_table():
 # 6. 메인 루프
 # ==========================================
 def main():
+    global master_volume
     logic_history = [[0.0]*3 for _ in range(4)]
     tick_count = 0
     
     with Live(generate_table(), refresh_per_second=10, screen=True) as live:
         try:
             while True:
+                # 키보드 입력 처리
+                if msvcrt.kbhit():
+                    key = msvcrt.getch().lower()
+                    if key == b'1': toggle_track(0)
+                    elif key == b'2': toggle_track(1)
+                    elif key == b'3': toggle_track(2)
+                    elif key == b'4': toggle_track(3)
+                    elif key == b'q': 
+                        master_volume = max(0.0, master_volume - 0.05)
+                    elif key == b'w': 
+                        master_volume = min(1.0, master_volume + 0.05)
+
                 time.sleep(0.25)
                 
                 # 전체 CPU 사용량 가져오기
