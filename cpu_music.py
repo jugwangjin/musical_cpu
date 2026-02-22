@@ -30,10 +30,10 @@ s = Session(max_threads=2000)
 # ==========================================
 DRUM_KICK = s.new_part("Standard Drum Kit")  # Kick & Snare
 DRUM_HAT = s.new_part("Standard Drum Kit")   # Hats
-BASS = s.new_part("Synth Bass 1")            # Driving 16th note bass
-CHORDS = s.new_part("Pad 2 (warm)")          # Plucky warm synth (we'll play it staccato)
-ARP = s.new_part("Lead 2 (sawtooth)")        # 8-bit style arpeggio
-LEAD = s.new_part("Lead 1 (square)")         # Main melody
+BASS = s.new_part("Electric Bass (finger)")   # 짧게 끊기는 핑거 베이스
+CHORDS = s.new_part("Electric Piano 1")       # 잔향 없는 일렉트릭 피아노
+ARP = s.new_part("Marimba")                   # 타악기형(즉각 감쇠) 마림바
+LEAD = s.new_part("Vibraphone")               # 맑고 짧게 끊기는 비브라폰
 
 # ==========================================
 # 2. Strict Harmonic Structure
