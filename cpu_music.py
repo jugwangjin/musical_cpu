@@ -4,7 +4,9 @@ import contextlib
 import os
 import logging
 import random
-import msvcrt 
+import msvcrt
+import ctypes
+import hashlib
 from collections import deque
 from rich.live import Live
 from rich.table import Table
@@ -14,7 +16,7 @@ from rich import box
 from scamp import Session
 
 # ==========================================
-# 0. 로그 차단
+# 0. System Preparations
 # ==========================================
 for logger_name in ["root", "clockblocks", "scamp"]:
     logging.getLogger(logger_name).setLevel(logging.ERROR)
@@ -23,351 +25,221 @@ with contextlib.redirect_stdout(open(os.devnull, 'w')):
     from scamp import Session
 
 console = Console()
-console.print("[bold cyan]Loading The Ultimate CPU Symphony... (Allocating 19 Instruments)[/bold cyan]")
-console.print("[dim]This may take a few seconds as FluidSynth loads soundfonts.[/dim]")
+console.print("[bold red]AWAKENING THE SENTIENT OS...[/bold red]")
+console.print("[dim]Scanning neural pathways (CPU), memories (RAM), and senses (I/O, Focus)...[/dim]")
 
 s = Session(max_threads=1000)
 
 # ==========================================
-# 1. 장르별 악기 설정 (Pre-load)
+# 1. The Synaptic Instruments
 # ==========================================
-GENRE_NAMES = ["🎸 Jazz Funk", "👾 Cyberpunk", "🎻 Orchestral"]
-GENRE_PARTS = []
-
-# 0: Jazz Funk (기존)
-GENRE_PARTS.append([
-    s.new_part("Electric Guitar (jazz)"),
-    s.new_part("Electric Guitar (clean)"),
-    s.new_part("Clavinet"),
-    s.new_part("Electric Piano 1"),
-    s.new_part("Standard Drum Kit"),
-    s.new_part("Electric Bass (pick)")
-])
-
-# 1: Cyberpunk (Synthwave)
-GENRE_PARTS.append([
-    s.new_part("Lead 1 (square)"),
-    s.new_part("Lead 2 (sawtooth)"),
-    s.new_part("Synth Bass 1"),
-    s.new_part("Pad 3 (polysynth)"),
-    s.new_part("Electronic Drum"),
-    s.new_part("Synth Bass 2")
-])
-
-# 2: Orchestral (Symphony)
-GENRE_PARTS.append([
-    s.new_part("Violin"),
-    s.new_part("String Ensemble 1"),
-    s.new_part("Flute"),
-    s.new_part("Choir Aahs"),
-    s.new_part("Timpani"),
-    s.new_part("Contrabass")
-])
-
-# Network Data Stream (공통)
-data_stream_part = s.new_part("Glockenspiel")
-
-TARGET_CORES = [0, 2, 4, 6, 8, 10]
-
-# ==========================================
-# 2. 전역 상태
-# ==========================================
-SCALE_NOTES = [60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79, 81, 83, 84]
-CHORD_LEVELS = [
-    ("Idle",   "C Maj7", [60, 64, 67, 71]),
-    ("Light",  "F Maj7", [53, 57, 60, 64]),
-    ("Work",   "G7",     [55, 59, 62, 65]),
-    ("Busy",   "Am7",    [57, 60, 64, 67]),
-    ("Heavy",  "Bdim",   [59, 62, 65, 68]),
-    ("Crit",   "C High", [72, 76, 79, 83])
+# Instead of genres, we have a pool of "Thoughts"
+LEAD_POOL = [
+    s.new_part("Marimba"),            # Logical, mathy
+    s.new_part("Vibraphone"),         # Dreamy
+    s.new_part("Electric Guitar (jazz)"), # Human
+    s.new_part("Oboe"),               # Melancholic
+    s.new_part("Lead 8 (bass+lead)"), # Aggressive
+    s.new_part("Kalimba")             # Playful
 ]
 
-current_chord_name = "C Maj7"
-current_chord_notes = CHORD_LEVELS[0][2]
-current_mood = "Idle"
-master_volume = 1.0
-current_genre_idx = 0
-overdrive_mode = False
+BASS_POOL = [
+    s.new_part("Acoustic Bass"),
+    s.new_part("Fretless Bass"),
+    s.new_part("Synth Bass 2")
+]
 
-def get_chord_from_cpu(avg_cpu):
-    idx = int((avg_cpu / 100.1) * len(CHORD_LEVELS))
-    return CHORD_LEVELS[idx]
-
-def get_weighted_note(chord_notes):
-    if random.random() < 0.8: return random.choice(chord_notes)
-    else: return random.choice(SCALE_NOTES)
+PAD_PART = s.new_part("Pad 1 (new age)")
+DRUM_PART = s.new_part("Standard Drum Kit")
 
 # ==========================================
-# 3. 연주 함수 (장르 대응)
+# 2. The Emotional Scales (Musical Theory)
 # ==========================================
-
-def play_lead(cpu_val, duration, inst):
-    notes = current_chord_notes[:3]
-    if cpu_val > 60:
-        note = random.choice(notes) + 12
-        vol = 0.54 * master_volume * (1.2 if overdrive_mode else 1.0)
-        s.fork(lambda: inst.play_note(note, vol, duration))
-        return "Solo!"
-    else:
-        note = random.choice(notes)
-        vol = 0.45 * master_volume
-        s.fork(lambda: inst.play_note(note, vol, duration))
-        return "Lick"
-
-def play_rhythm(cpu_val, duration, inst):
-    notes = current_chord_notes[1:] 
-    base_vol = 0.36 + (cpu_val / 330)
-    vol = base_vol * master_volume
-    # 오케스트라는 더 길게, 펑크는 짧게
-    dur_mult = 4 if current_genre_idx == 2 else 2
-    s.fork(lambda: inst.play_chord(notes, vol, duration * dur_mult)) 
-    return f"Chord {current_chord_name}"
-
-def play_counter(cpu_val, duration, inst):
-    base_note = get_weighted_note(current_chord_notes)
-    if random.random() < 0.5: base_note += 12
-    vol = 0.45 * master_volume
-    s.fork(lambda: inst.play_note(base_note, vol, 0.15))
-    return "Counter!"
-
-def play_pad(cpu_val, duration, inst):
-    notes = current_chord_notes
-    base_vol = 0.36 + (cpu_val / 440)
-    vol = base_vol * master_volume
-    dur_mult = 8 if current_genre_idx == 2 else 4
-    s.fork(lambda: inst.play_chord(notes, vol, duration * dur_mult))
-    return "Pad"
-
-def play_drums(cpu_val, duration, inst):
-    vol = 0.7 * master_volume
-    if current_genre_idx == 2: # 오케스트라(Timpani)는 화음 근음을 칩니다.
-        root = current_chord_notes[0] - 24
-        parts = [root]
-        if cpu_val > 40: parts.append(root + 7)
-        for p in parts: s.fork(lambda: inst.play_note(p, vol, duration * 2))
-        return "Timpani"
-    else: # 일반 드럼 매핑
-        parts = [42]
-        if cpu_val > 20: parts.append(36)
-        if cpu_val > 40: parts.append(38)
-        for p in parts: s.fork(lambda: inst.play_note(p, vol, duration))
-        return "Beat"
-
-def play_bass(cpu_val, duration, inst):
-    root = current_chord_notes[0] - 12
-    if cpu_val > 50: note = root + 7
-    else: note = root
-    vol = 1.0 * master_volume
-    dur_mult = 2 if current_genre_idx == 2 else 1
-    s.fork(lambda: inst.play_note(note, vol, duration * dur_mult))
-    return f"Root {note}"
-
-def play_data_stream(net_kbps, duration):
-    if net_kbps < 5: return "-"
-    # 네트워크 트래픽이 많으면 글록켄슈필로 빠른 아르페지오 데이터 스트림 연주
-    notes = current_chord_notes + [current_chord_notes[-1]+12]
-    vol = min(1.0, 0.2 + (net_kbps / 2000.0)) * master_volume
-    
-    def arp():
-        for _ in range(4): # 0.25초 동안 4개의 64분 음표 연주
-            data_stream_part.play_note(random.choice(notes) + 24, vol, duration / 4)
-    s.fork(arp)
-    return f"{net_kbps:.0f}KB/s"
-
-def apply_reverb(ram_percent):
-    reverb_val = 10 + int(ram_percent * 1.1)
-    if reverb_val > 127: reverb_val = 127
-    
-    for genre in GENRE_PARTS:
-        for inst in genre:
-            try:
-                if hasattr(inst, 'play_cc'): inst.play_cc(91, reverb_val)
-                elif hasattr(inst, 'control_change'): inst.control_change(91, reverb_val)
-            except: pass
-    try:
-        if hasattr(data_stream_part, 'play_cc'): data_stream_part.play_cc(91, reverb_val)
-    except: pass
-    return reverb_val
-
-# ==========================================
-# 4. UI 및 상태 관리
-# ==========================================
-GRAPH_WIDTH = 20
-vis_history = {i: deque([0]*GRAPH_WIDTH, maxlen=GRAPH_WIDTH) for i in range(7)} # 7트랙 (Core6 + Net1)
-system_state = {
-    0: {"role": "Lead",   "val": 0, "note": "-", "active": False, "enabled": True},
-    1: {"role": "Rhythm", "val": 0, "note": "-", "active": False, "enabled": True},
-    2: {"role": "Counter","val": 0, "note": "-", "active": False, "enabled": True},
-    3: {"role": "Pad",    "val": 0, "note": "-", "active": False, "enabled": True},
-    4: {"role": "Drums",  "val": 0, "note": "-", "active": False, "enabled": True},
-    5: {"role": "Bass",   "val": 0, "note": "-", "active": False, "enabled": True},
-    6: {"role": "Net Data", "val": 0, "note": "-", "active": False, "enabled": True}, # Track 7
+SCALES = {
+    "Ionian (Happy)":      [0, 2, 4, 5, 7, 9, 11],
+    "Dorian (Dreamy)":     [0, 2, 3, 5, 7, 9, 10],
+    "Phrygian (Dark)":     [0, 1, 3, 5, 7, 8, 10],
+    "Lydian (Mystical)":   [0, 2, 4, 6, 7, 9, 11],
+    "Mixolydian (Blues)":  [0, 2, 4, 5, 7, 9, 10],
+    "Aeolian (Sad)":       [0, 2, 3, 5, 7, 8, 10],
+    "Locrian (Tense)":     [0, 1, 3, 5, 6, 8, 10],
+    "Pentatonic (Zen)":    [0, 2, 4, 7, 9],
+    "Whole Tone (Alien)":  [0, 2, 4, 6, 8, 10],
+    "Diminished (Fear)":   [0, 2, 3, 5, 6, 8, 9, 11]
 }
-
-def toggle_track(idx):
-    system_state[idx]["enabled"] = not system_state[idx]["enabled"]
-    if not system_state[idx]["enabled"]:
-        try:
-            if idx == 6: data_stream_part.end_all_notes()
-            else:
-                for genre in GENRE_PARTS: genre[idx].end_all_notes()
-        except: pass
-
-def get_sparkline(data_queue, is_net=False):
-    levels = "  ▂▃▄▅▆▇█"
-    spark = ""
-    for val in data_queue:
-        if is_net:
-            # Net val: 0 ~ 2000KB/s
-            idx = min(8, int((val / 2000.0) * 8))
-        else:
-            idx = int((val / 100.1) * 8)
-        spark += levels[idx]
-    return spark
-
-def generate_table(avg_cpu, ram_percent, reverb_val):
-    theme_color = "red" if overdrive_mode else ("green" if avg_cpu < 40 else "yellow")
-    title = f"[bold {theme_color}]CPU Symphony: {current_mood} ({current_chord_name}) | Load: {avg_cpu:.1f}%[/bold {theme_color}]"
-    if overdrive_mode: title += " [blink bold red]🔥 OVERDRIVE 🔥[/blink bold red]"
-    
-    vol_bars = int(master_volume * 10)
-    vol_display = "█" * vol_bars + "░" * (10 - vol_bars)
-    
-    subtitle = f"[bold cyan]Genre: {GENRE_NAMES[current_genre_idx]}[/bold cyan] | Vol: {vol_display} | Z:Funk X:Cyber C:Orch | 1-7: Mute"
-    
-    table = Table(box=box.ROUNDED, title=title, caption=subtitle)
-    table.add_column("Key", style="cyan", width=3, justify="center")
-    table.add_column("Source", style="dim", width=6)
-    table.add_column("Role", style="magenta", width=12)
-    table.add_column("Activity History", width=GRAPH_WIDTH)
-    table.add_column("Val", justify="right", width=8)
-    table.add_column("Status", style="green", width=14) 
-    
-    for i in range(7):
-        state = system_state[i]
-        is_net = (i == 6)
-        
-        if not state["enabled"]:
-            style = "dim"; status_text = "[dim]MUTED[/dim]"; graph = "x" * GRAPH_WIDTH; val_text = "---"
-        else:
-            style = "bold red" if (overdrive_mode and not is_net) else ""
-            status_text = state["note"] if not state["active"] else f"[bold white]{state['note']}[/bold white]"
-            
-            graph_color = "cyan" if is_net else theme_color
-            graph = f"[{graph_color}]{get_sparkline(vis_history[i], is_net)}[/{graph_color}]"
-            
-            if is_net: val_text = f"{state['val']:.0f}K"
-            else: val_text = f"{state['val']:.0f}%"
-            
-        if state["active"]: state["active"] = False
-        
-        src_label = "NET" if is_net else f"#{TARGET_CORES[i]+1}"
-        table.add_row(f"[{i+1}]", src_label, state["role"], graph, val_text, status_text, style=style)
-        
-    return Panel(table, expand=False)
+NOTES_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
 # ==========================================
-# 5. 메인 루프
+# 3. The Fractal Chaos Engine (Logistic Map)
+# ==========================================
+# x_n+1 = r * x_n * (1 - x_n)
+chaos_x = 0.5
+
+def get_fractal_note(r_param, scale_notes):
+    global chaos_x
+    # R parameter defines chaos level (3.0 to 4.0)
+    # 3.0 = Simple repeating loop
+    # 3.5 = Complex but structured cycle
+    # 3.9 = Pure unpredictable chaos
+    chaos_x = r_param * chaos_x * (1.0 - chaos_x)
+    if chaos_x < 0.0: chaos_x = 0.01
+    if chaos_x >= 1.0: chaos_x = 0.99
+    
+    # Map chaos value (0.0~1.0) to an index in our current scale
+    idx = int(chaos_x * len(scale_notes))
+    return scale_notes[idx], chaos_x
+
+# ==========================================
+# 4. OS Context Reading (The "Eyes")
+# ==========================================
+def get_active_window_title():
+    try:
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+        length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+        buff = ctypes.create_unicode_buffer(length + 1)
+        ctypes.windll.user32.GetWindowTextW(hwnd, buff, length + 1)
+        title = buff.value
+        return title if title else "Idle Desktop"
+    except:
+        return "Unknown Context"
+
+def generate_context_signature(title):
+    # Hash the window title to deterministically select the Key, Scale, and Instruments
+    h = int(hashlib.md5(title.encode('utf-8')).hexdigest(), 16)
+    
+    root_offset = (h % 12)
+    root_name = NOTES_NAMES[root_offset]
+    root_midi = root_offset + 60 # C4 to B4
+    
+    scale_idx = (h // 12) % len(SCALES)
+    scale_name = list(SCALES.keys())[scale_idx]
+    intervals = list(SCALES.values())[scale_idx]
+    
+    # Generate 3 octaves of the scale
+    full_scale = []
+    for oct in [-1, 0, 1]:
+        for interval in intervals:
+            full_scale.append(root_midi + interval + (oct * 12))
+            
+    lead_idx = (h // 144) % len(LEAD_POOL)
+    bass_idx = (h // 576) % len(BASS_POOL)
+    
+    return root_name, scale_name, full_scale, lead_idx, bass_idx
+
+# ==========================================
+# 5. The Nervous System (Main Loop)
 # ==========================================
 def main():
-    global current_chord_name, current_chord_notes, current_mood, master_volume, current_genre_idx, overdrive_mode
-    tick_count = 0
-    logic_history = [[0.0]*3 for _ in range(6)]
-    step_duration = 0.25 
+    global chaos_x
     
-    net_last = psutil.net_io_counters().bytes_sent + psutil.net_io_counters().bytes_recv
+    last_title = ""
+    root_name = "C"
+    scale_name = "Ionian (Happy)"
+    full_scale = []
+    lead_idx, bass_idx = 0, 0
+    
+    net_last = psutil.net_io_counters().bytes_recv + psutil.net_io_counters().bytes_sent
+    disk_last = psutil.disk_io_counters().read_bytes + psutil.disk_io_counters().write_bytes
+    
+    # UI History
+    r_history = deque([3.0]*40, maxlen=40)
+    x_history = deque([0.5]*40, maxlen=40)
+    
+    step_duration = 0.25 # 16th notes
+    tick = 0
+    
+    def render_ui(cpu, ram, r_val, x_val, net_kbps, disk_kbps):
+        levels = "  ▂▃▄▅▆▇█"
+        r_spark = "".join([levels[int(((v - 3.0)/1.0) * 8)] for v in r_history])
+        x_spark = "".join([levels[int(v * 8)] for v in x_history])
+        
+        table = Table(box=box.MINIMAL_DOUBLE_HEAD, title="[blink bold red]🧠 SENTIENT OS SONIFICATION ENGINE[/blink bold red]")
+        table.add_column("Sensor", style="cyan", width=12)
+        table.add_column("Data Telemetry", style="white", width=40)
+        table.add_column("Musical Translation", style="magenta", width=25)
+        
+        table.add_row("👁️ FOCUS", f"[bold yellow]{last_title[:38]}[/bold yellow]", f"{root_name} {scale_name}")
+        table.add_row("⚡ CPU (Chaos)", f"[{'red' if cpu>80 else 'green'}]{cpu:.1f}%[/] -> r={r_val:.3f} [{r_spark}]", f"Fractal x_n = {x_val:.3f}")
+        table.add_row("🧠 RAM (Space)", f"{ram:.1f}%", f"Reverb CC91: {int(10 + ram)}")
+        table.add_row("🌐 NET (Breath)", f"{net_kbps:.1f} KB/s", f"Pad Swell Vol: {min(1.0, 0.2 + net_kbps/1000):.2f}")
+        table.add_row("💾 DISK (Pulse)", f"{disk_kbps:.1f} KB/s", f"Percussion Hits")
+        
+        return Panel(table, expand=False, border_style="red")
 
-    with Live(generate_table(0, 0, 0), refresh_per_second=10, screen=True) as live:
+    with Live(render_ui(0,0,3.0,0.5,0,0), refresh_per_second=10, screen=True) as live:
         try:
             while True:
-                if msvcrt.kbhit():
-                    key = msvcrt.getch().lower()
-                    if key in [b'1', b'2', b'3', b'4', b'5', b'6', b'7']:
-                        toggle_track(int(key.decode()) - 1)
-                    elif key == b'q': master_volume = max(0.0, master_volume - 0.05)
-                    elif key == b'w': master_volume = min(1.0, master_volume + 0.05)
-                    elif key == b'z': current_genre_idx = 0 # Funk
-                    elif key == b'x': current_genre_idx = 1 # Cyberpunk
-                    elif key == b'c': current_genre_idx = 2 # Orchestral
+                # 1. Read Window Context (Changes the Song's DNA)
+                current_title = get_active_window_title()
+                if current_title != last_title:
+                    last_title = current_title
+                    root_name, scale_name, full_scale, lead_idx, bass_idx = generate_context_signature(current_title)
+                    # Reset chaos slightly to mark a new thought
+                    chaos_x = 0.5 
                 
                 time.sleep(step_duration)
-
-                # OS Metrics
-                cpu_all = psutil.cpu_percent(interval=None, percpu=True)
-                current_vals = [cpu_all[i] if i < len(cpu_all) else 0.0 for i in TARGET_CORES]
-                avg_cpu = sum(current_vals) / len(current_vals)
                 
-                net_now = psutil.net_io_counters().bytes_sent + psutil.net_io_counters().bytes_recv
-                net_diff_kb = (net_now - net_last) / 1024.0 # KB/s since 0.25s
-                net_last = net_now
-
+                # 2. Read Physical Sensors
+                cpu = psutil.cpu_percent()
                 ram = psutil.virtual_memory().percent
-                reverb_val = apply_reverb(ram)
                 
-                current_mood, current_chord_name, current_chord_notes = get_chord_from_cpu(avg_cpu)
-                overdrive_mode = (avg_cpu > 80)
+                net_now = psutil.net_io_counters().bytes_recv + psutil.net_io_counters().bytes_sent
+                net_kbps = (net_now - net_last) / 1024.0
+                net_last = net_now
                 
-                # Update UI queues
-                for i in range(6):
-                    val = current_vals[i]
-                    logic_history[i].pop(0); logic_history[i].append(val)
-                    vis_history[i].append(val)
-                    system_state[i]["val"] = val
-                vis_history[6].append(net_diff_kb)
-                system_state[6]["val"] = net_diff_kb
-
-                # Active Instruments for Current Genre
-                insts = GENRE_PARTS[current_genre_idx]
-
-                # --- 6 Core Logic + 1 Net Logic ---
+                disk_now = psutil.disk_io_counters().read_bytes + psutil.disk_io_counters().write_bytes
+                disk_kbps = (disk_now - disk_last) / 1024.0
+                disk_last = disk_now
                 
-                # 1. Lead (Every 2 ticks)
-                if system_state[0]["enabled"]:
-                    if tick_count % 2 == 0:
-                        system_state[0]["note"] = play_lead(current_vals[0], step_duration, insts[0])
-                        system_state[0]["active"] = True
+                # 3. Calculate Chaos (r_param ranges from 3.0 to 3.99 based on CPU)
+                # Idle CPU -> 3.2 (Calm, repeating arpeggios)
+                # Max CPU -> 3.99 (Wild, non-repeating fractal solos)
+                r_param = 3.1 + (cpu / 100.0) * 0.89
+                
+                # 4. Generate Fractal Melody
+                note, x_val = get_fractal_note(r_param, full_scale)
+                
+                r_history.append(r_param)
+                x_history.append(x_val)
+                
+                # Apply Reverb based on RAM
+                try:
+                    for p in LEAD_POOL + BASS_POOL + [PAD_PART, DRUM_PART]:
+                        if hasattr(p, 'play_cc'): p.play_cc(91, int(10 + ram))
+                except: pass
 
-                # 2. Rhythm Chord (Every 4 ticks)
-                if system_state[1]["enabled"]:
-                    if tick_count % 4 == 0:
-                        system_state[1]["note"] = play_rhythm(current_vals[1], step_duration, insts[1])
-                        system_state[1]["active"] = True
+                # 5. Play the Thought (The Music)
+                
+                # Lead (Fractal Melody)
+                if cpu > 10: # Only think if doing something
+                    vol = min(1.0, 0.4 + (cpu/200.0))
+                    # Staccato short notes
+                    s.fork(lambda: LEAD_POOL[lead_idx].play_note(note, vol, 0.12))
+                
+                # Bass (Anchor - plays the root of the fractal segment)
+                if tick % 4 == 0:
+                    bass_note = full_scale[0] - 12 # Root minus 1 octave
+                    if x_val > 0.5: bass_note += 7 # Perfect 5th
+                    s.fork(lambda: BASS_POOL[bass_idx].play_note(bass_note, 0.8, 0.4))
+                
+                # Pad (Breath - controlled by Network)
+                if tick % 8 == 0 and net_kbps > 1.0:
+                    pad_notes = [full_scale[0], full_scale[2], full_scale[4]] # Triad
+                    pad_vol = min(0.8, 0.2 + (net_kbps / 2000.0))
+                    s.fork(lambda: PAD_PART.play_chord(pad_notes, pad_vol, 1.8))
+                
+                # Drums (Pulse - controlled by Disk I/O)
+                if disk_kbps > 50.0:
+                    # Heavy disk activity = Kick + Crash
+                    s.fork(lambda: DRUM_PART.play_note(36, 1.0, 0.1)) # Kick
+                    if disk_kbps > 500.0:
+                        s.fork(lambda: DRUM_PART.play_note(49, 0.8, 0.1)) # Crash
+                elif tick % 2 == 0 and cpu > 30:
+                    # Light ticking
+                    s.fork(lambda: DRUM_PART.play_note(42, 0.5, 0.1)) # Closed HH
 
-                # 3. Counter Melody (Random Peaks)
-                if system_state[2]["enabled"]:
-                    vals = logic_history[2]
-                    is_peak = (vals[1] > vals[0] and vals[1] > vals[2])
-                    if is_peak or random.random() < 0.2:
-                        system_state[2]["note"] = play_counter(vals[1], step_duration, insts[2])
-                        system_state[2]["active"] = True
-
-                # 4. Pad (Every 4 ticks)
-                if system_state[3]["enabled"]:
-                    if tick_count % 4 == 0:
-                        system_state[3]["note"] = play_pad(current_vals[3], step_duration, insts[3])
-                        system_state[3]["active"] = True
-
-                # 5. Drums (Every 2 ticks)
-                if system_state[4]["enabled"]:
-                    if tick_count % 2 == 0:
-                        system_state[4]["note"] = play_drums(current_vals[4], step_duration, insts[4])
-                        system_state[4]["active"] = True
-
-                # 6. Bass (Every 4 ticks)
-                if system_state[5]["enabled"]:
-                    if tick_count % 4 == 0:
-                        system_state[5]["note"] = play_bass(current_vals[5], step_duration, insts[5])
-                        system_state[5]["active"] = True
-
-                # 7. Network Data Stream (Every tick)
-                if system_state[6]["enabled"]:
-                    note_str = play_data_stream(net_diff_kb, step_duration)
-                    if note_str != "-":
-                        system_state[6]["note"] = note_str
-                        system_state[6]["active"] = True
-
-                tick_count += 1
-                live.update(generate_table(avg_cpu, ram, reverb_val))
+                tick += 1
+                live.update(render_ui(cpu, ram, r_param, x_val, net_kbps, disk_kbps))
 
         except KeyboardInterrupt:
             pass
