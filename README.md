@@ -1,8 +1,8 @@
 # 🎵 CPU Symphony: The Sound of Processing
 
-> **"당신의 CPU가 연주하는 실시간 재즈 즉흥곡"**
->
-> 컴퓨터의 연산 부하를 실시간으로 분석하여, 아름다운 선율과 화음으로 변환하는 제너레이티브 아트(Generative Art) 프로젝트입니다.
+> **"당신의 CPU가 연주하는 실시간 재즈 펑크(Funk)"**
+> 
+> 컴퓨터의 연산 부하를 실시간으로 분석하여, 그루브 넘치는 밴드 사운드로 변환하는 제너레이티브 아트(Generative Art) 프로젝트입니다.
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
 ![Verdent](https://img.shields.io/badge/Vibe_Coding-Verdent-7000FF?style=flat&logo=openai)
@@ -12,7 +12,7 @@
 
 이 프로젝트는 정적인 시스템 모니터링을 청각적인 경험으로 바꿉니다. 작업 관리자의 그래프를 멍하니 바라보는 대신, 내 컴퓨터가 얼마나 바쁘게 일하고 있는지 **소리**로 들어보세요.
 
-단순한 비프음이 아닙니다. **12코어 프로세서의 리듬**을 분석하여 기타와 피아노가 어우러진 앙상블을 실시간으로 지휘합니다.
+단순한 비프음이 아닙니다. **16코어 프로세서의 리듬**을 분석하여 기타, 베이스, 드럼, 신디사이저가 어우러진 앙상블을 실시간으로 지휘합니다.
 
 ## 🛠️ 사용된 라이브러리 (Tech Stack)
 
@@ -34,19 +34,24 @@
 
 ## 🎛️ 작동 원리 (How it works)
 
-시스템은 **Core 1, 4, 7, 10**번 프로세서를 모니터링하며, 각각 다른 악기와 역할을 맡습니다.
+시스템은 **Core 0, 3, 6, 9**번 프로세서를 모니터링하며, 각각 다른 악기와 역할을 맡습니다. (0-indexed)
 
 | Core Index | Role | Instrument | Logic (Algorithm) |
 | :--- | :--- | :--- | :--- |
-| **Core 1** | Chord | Classical Guitar | CPU 부하(0~100%)를 8개 코드로 매핑하여 1초마다 연주 |
-| **Core 4** | Melody | Jazz Guitar | CPU 부하의 **변곡점(Peak/Valley)** 감지 시 즉흥 멜로디 연주 |
-| **Core 7** | Chord | Piano | Guitar Chord와 옥타브/보이싱을 달리하여 풍성함 더함 |
-| **Core 10** | Melody | Electric Piano | 고음역대에서 Guitar Melody와 주고받으며 화려함 장식 |
+| **Core 1** | **Main Guitar** | Electric Guitar (Jazz) | CPU 부하(0~100%)를 코드(C Maj7 ~ Bdim)로 매핑하여 리드 연주 |
+| **Core 4** | **Atmosphere** | Sawtooth Lead | 부하의 변화량(Delta)을 감지하여 짧고 강렬한 신스 악센트 추가 |
+| **Core 7** | **Groove** | Drum Kit | Kick, Snare, Hi-hat을 부하에 따라 조합하여 비트 생성 |
+| **Core 10** | **Foundation** | Electric Bass (Pick) | 코드의 근음(Root)을 묵직하게 잡아주며 곡의 중심 유지 |
+
+### 🎼 음악적 특징 (Musical Features)
+- **Real-time Reaction**: 0.25초(16분 음표) 단위로 CPU 상태를 반영하여 즉각적으로 반응합니다.
+- **Adaptive Harmony**: CPU 전체 부하 평균에 따라 코드 진행이 바뀝니다. (Idle=C Maj7 -> Busy=Am7 -> Heavy=Bdim)
+- **Stabilized Randomness**: 완전 랜덤이 아닌, 현재 코드 톤(Chord Tone) 위주로 연주하여 항상 듣기 좋은 화음을 유지합니다.
 
 ## 🚀 실행 방법 (Getting Started)
 
 ### 1. 환경 설정
-`conda` 또는 `venv` 환경을 권장합니다.
+Windows 환경에서 실행하는 것을 권장합니다. (키보드 인터랙션 `msvcrt` 사용)
 
 ```bash
 # 필수 라이브러리 설치
@@ -58,6 +63,14 @@ pip install scamp scamp_extensions rich psutil
 python cpu_music.py
 ```
 *(실행 시 오디오 드라이버 설정 로그가 뜰 수 있으나, 자동으로 최적의 설정을 찾습니다.)*
+
+### 3. 인터랙션 (Controls)
+실행 중에 키보드 숫자키를 눌러 각 악기를 **Mute/Unmute** 할 수 있습니다.
+
+- `1`: Guitar Toggle
+- `2`: Synth Toggle
+- `3`: Drums Toggle
+- `4`: Bass Toggle
 
 ## 🧑‍💻 Credits & Vibe Coding
 
